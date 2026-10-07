@@ -6,12 +6,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -143,6 +145,49 @@ func main() {
 			})
 		}
 	})
+}
+
+func TestDirectInaccessiblePathDirectory(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root may bypass directory search permissions")
+	}
+	dir := t.TempDir()
+	blocked := filepath.Join(dir, "blocked")
+	visible := filepath.Join(dir, "visible")
+	for _, path := range []string{blocked, visible} {
+		if err := os.Mkdir(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Restore permissions before TempDir removes its contents.
+	t.Cleanup(func() {
+		if err := os.Chmod(blocked, 0700); err != nil {
+			t.Errorf("restore directory permissions: %v", err)
+		}
+	})
+	if err := os.Chmod(blocked, 0000); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(blocked, "missing")); !errors.Is(err, syscall.EACCES) {
+		t.Skipf("directory search permission is not enforced: %v", err)
+	}
+	writeTestFile(t, filepath.Join(visible, "present"), []byte("not executable"), 0600)
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fixture := range []struct {
+		command string
+		code    int
+	}{{"missing", 127}, {"present", 126}} {
+		t.Run(fixture.command, func(t *testing.T) {
+			stdout, stderr, code, _ := runRootDirectCLI(t, exe, dir,
+				testEnvironment(map[string]string{"PATH": blocked + string(os.PathListSeparator) + visible}), "", fixture.command)
+			if code != fixture.code || stdout != "" || !strings.HasPrefix(stderr, "trysudo: ") {
+				t.Errorf("code=%d stdout=%q stderr=%q; want %d and a launch diagnostic", code, stdout, stderr, fixture.code)
+			}
+		})
+	}
 }
 
 // The direct-path contract must not depend on the CI user's privileges or

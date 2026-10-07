@@ -75,7 +75,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 func runWithCredentials(args []string, stdout, stderr io.Writer, creds credentials) int {
 	options, err := parseCLI(args)
 	if err != nil {
-		fmt.Fprintf(stderr, "trysudo: %v\n", err)
+		writeDiagnostic(stderr, fmt.Sprintf("trysudo: %v\n", err))
 		return 2
 	}
 	if options.help {
