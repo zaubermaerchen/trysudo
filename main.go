@@ -1,6 +1,6 @@
 package main
 
-// This file provides the CLI entry point and bootstrap argument handling.
+// This file provides the CLI entry point and argument handling.
 
 import (
 	"fmt"
@@ -17,12 +17,10 @@ const helpText = `Usage:
   trysudo --version
 
 Options:
-  -n, --non-interactive  Accept non-interactive mode (execution not implemented).
+  -n, --non-interactive  Accept non-interactive mode (sudo not implemented).
   -h, --help             Show this help.
   --version              Show the version.
   --                     End trysudo option parsing.
-
-Command execution is not implemented yet.
 `
 
 type cliOptions struct {
@@ -84,7 +82,5 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "trysudo %s\n", version)
 		return 0
 	}
-	// Until execution exists, fail explicitly so scripts cannot mistake a no-op for success.
-	fmt.Fprintln(stderr, "trysudo: command execution is not implemented yet")
-	return 1
+	return runDirect(options.command, stderr)
 }
