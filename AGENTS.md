@@ -73,7 +73,7 @@
 - 並行処理に関係する変更では `go test -race ./...`
 - `go vet ./...`
 - OS 固有コードに関係する変更では、対象 OS のテストまたはクロスコンパイル
-- PR の GitHub Actions が Ubuntu、macOS、Windows、race の各ジョブで成功すること
+- PR の GitHub Actions が Ubuntu、macOS、race の各ジョブで成功すること。Windowsは対象外。
 
 ## PR レビュー対応
 
