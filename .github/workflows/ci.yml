@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu / Go 1.26
+            os: ubuntu-latest
+            go: '1.26.x'
+          - name: race / Ubuntu / Go 1.27
+            os: ubuntu-latest
+            go: '1.27.x'
+          - name: macOS / Go 1.27
+            os: macos-latest
+            go: '1.27.x'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ matrix.go }}
+          cache: false
+      - name: Check formatting and whitespace
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            printf '%s\n' "$unformatted"
+            exit 1
+          fi
+          git diff --check
+          git diff --check "$(git hash-object -t tree /dev/null)" HEAD
+      - name: Test
+        run: go test ./...
+      - name: Race test
+        if: matrix.os == 'ubuntu-latest' && matrix.go == '1.27.x'
+        run: go test -race ./...
+      - name: Vet
+        run: go vet ./...
