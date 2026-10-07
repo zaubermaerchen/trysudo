@@ -45,8 +45,13 @@ func resolveDirect(command string) (string, error) {
 	// ErrNotFound. Preserve its search order, then distinguish absent targets
 	// from found targets only after the search has failed.
 	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
-		_, statErr := os.Stat(filepath.Join(dir, command))
+		info, statErr := os.Stat(filepath.Join(dir, command))
 		if statErr == nil {
+			// Preserve LookPath's exclusion of directories, including symlinks
+			// to them, rather than classifying them as unexecutable commands.
+			if info.IsDir() {
+				continue
+			}
 			return "", &exec.Error{Name: command, Err: syscall.EACCES}
 		}
 		// Search permission failure does not establish that this command

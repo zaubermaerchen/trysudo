@@ -322,12 +322,18 @@ errno等の扱いは次を基本とする。
 
 ### 検証済み
 
-upstream sudo＋sudoers policyを対象とする。Linux上のupstream sudo 1.9系を用いた実際の実行は検証済みである。これを未検証のOS・アーキテクチャ・バージョンへ一般化しない。
+upstream sudo＋sudoers policyを対象とする。記録されている実sudoによる確認は、次の条件での1回の手動検証に限る。
+
+- OS・アーキテクチャ：Ubuntu Linux amd64。
+- sudo：Ubuntu配布版のupstream sudo 1.9.15p5。
+- ビルド：作業コピーで`go.mod`のGo directiveを一時的に引き下げ、Go 1.24.7で作成したバイナリ。
+
+この手動検証は、プロジェクトの正式なGo 1.26ビルドに対する実sudo検証ではない。正式な最低Goバージョンは変更しない。結果を未検証のOS・アーキテクチャ・sudoバージョン・ビルド条件へ一般化しない。
 
 ### Best effort
 
-- macOS上のsudo。CIのテストスイート成功は、実sudoによる実行の互換性検証を意味しない。別途検証するまではbest effortとする。
-- sudo-rs。別途検証するまではbest effortとする。
+- macOS上のsudoは未検証。CIのテストスイート成功は、実sudoによる実行の互換性検証を意味しない。別途検証するまではbest effortとする。
+- sudo-rsは未検証。別途検証するまではbest effortとする。
 - その他の未検証のupstream sudo。
 - 古いsudo。
 - 独自policy plugin。

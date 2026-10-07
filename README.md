@@ -38,10 +38,14 @@ go test ./...
 Development builds report `trysudo devel`. Set a version at build time with
 `go build -ldflags '-X main.version=v0.1.0' -o trysudo .`.
 
-Real execution has been verified on Linux with upstream sudo 1.9.x. macOS
-and sudo-rs remain best effort until separately verified. CI checks Ubuntu and
-macOS with Go 1.26 and 1.27, but passing its test suite does not establish
-real-sudo compatibility on macOS. The manually triggered
+One manual real-sudo verification session covered Ubuntu Linux amd64 with
+Ubuntu-packaged upstream sudo 1.9.15p5. The binary was built with Go 1.24.7 after
+temporarily lowering the `go.mod` directive in a working copy; this does not
+validate the project's official Go 1.26 build. macOS and sudo-rs are unverified
+and remain best effort.
+
+CI checks Ubuntu and macOS with Go 1.26 and 1.27, but passing its Go test suite
+does not establish real-sudo execution compatibility. The manually triggered
 **Build Unix binaries** workflow uploads Linux and macOS binaries for amd64
 and arm64 as workflow artifacts. Extract the included `trysudo.tar.gz` to
 preserve the binary's executable permissions. It does not publish GitHub Releases.

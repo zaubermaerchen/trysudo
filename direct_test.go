@@ -89,6 +89,9 @@ func main() {
 		if err := os.Symlink("loop", loop); err != nil {
 			t.Fatal(err)
 		}
+		if err := os.Symlink("bin", filepath.Join(work, "bin-link")); err != nil {
+			t.Fatal(err)
+		}
 		tests := []struct {
 			name, path, debug string
 			args              []string
@@ -98,6 +101,8 @@ func main() {
 			{"missing PATH", later, "", []string{"missing"}, 127},
 			{"empty PATH", "", "", []string{"command"}, 127},
 			{"non executable PATH", blocked, "", []string{"command"}, 126},
+			{"directory on PATH", work, "", []string{"bin"}, 127},
+			{"symlink to directory on PATH", work, "", []string{"bin-link"}, 127},
 			{"later executable wins", blocked + string(os.PathListSeparator) + later, "", []string{"command"}, 0},
 			{"relative PATH", "bin", "", []string{"command"}, 126},
 			{"relative PATH with ErrDot disabled", "bin", "execerrdot=0", []string{"command"}, 126},
