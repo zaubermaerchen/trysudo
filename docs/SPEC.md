@@ -152,7 +152,7 @@ CI、スクリプト、sudo権限が不明な環境、認証待ちを避けた�
 
 trysudoが監視を開始する前に現在のignore状態を確認し、ignoreされているsignalは監視対象にしない。残りを`signal.Notify`相当で監視する。
 
-任意のsignal dispositionやmaskの完全保存・復元は保証しない。「監視開始時点」はGoランタイム初期化前の状態を意味しない。
+Goランタイム初期化と最終execをまたいだ、任意のsignal dispositionやmaskの完全保存・復元は保証しない。起動前にignoreされていたsignal（特に`SIGTERM`、`SIGQUIT`、`SIGPIPE`）も、Goランタイムや起動環境によっては最終実行先でignoreが維持されない場合がある。「監視開始時点」はGoランタイム初期化前の状態を意味しない。
 
 ### 7.2 preflight実行中
 
@@ -177,7 +177,7 @@ sudoの終了だけでは直ちにfallbackやexecを確定しない。
 
 preflight用signal捕捉を残したままexecしない。trysudoが観測した中断後にはexecへ進まない。
 
-捕捉解除後は通常のsignal動作に戻し、exec成功後は置換先に任せる。任意のタイミングのsignalとexecを完全に原子的に順序付けることは保証しない。
+捕捉解除後にexecが成功したら、以降のsignal処理は置換先に任せる。起動前のsignal dispositionの完全な継承は、第7.1節のとおり保証しない。任意のタイミングのsignalとexecを完全に原子的に順序付けることは保証しない。
 
 ### 7.5 中断時の後始末
 
@@ -219,11 +219,11 @@ stderr → 呼び出し元stderr
 - 認証方法はsudoに任せ、askpass等をtrysudo独自に制御しない。
 - preflightが対象コマンド用stdinを消費しないことを保証する。
 - sudoの診断はstderrへ残す。プロンプトと診断を独自に分離しない。
-- 入出力設定はpreflight子に適用し、trysudo自身の元の標準FDを差し替えない。
+- 入出力設定はpreflight子に適用し、Goランタイム初期化後のtrysudo自身の標準FDを差し替えない。
 
 ### 最終実行
 
-元のstdin・stdout・stderrをそのまま継承する。trysudoが開いた不要なFDを最終実行へ漏らさない。
+Goランタイム初期化後にtrysudoが受け取ったstdin・stdout・stderrを継承する。起動前に標準FD（0、1、2）が閉じていても、Goランタイムが`/dev/null`などへ開き直す場合がある。呼び出し元が起動前に閉じていた状態を最終実行まで保持することは保証しない。trysudoが開いた不要なFDを最終実行へ漏らさない。
 
 ### fallback通知
 
@@ -265,6 +265,8 @@ sudoが見つからない場合などは、理由に応じた短い文でよい�
 
 PATH探索は一度だけ行い、相対的な探索結果を拒否した上で絶対パスを保持する。preflightと本番には同じsudoパスを使用する。パス先のファイルが途中で置換されないことまでは保証しない。
 
+sudoの通常の不存在・利用不能はdirect fallbackの対象になる。一方、シンボリックリンク循環（`ELOOP`）など予期しない探索エラーは内部エラーとして扱い、対象を起動せず終了する。これらをsudoの通常の不存在とみなしてfallbackしない。
+
 ### shebangなしスクリプト
 
 shebangなしスクリプトなど、directでENOEXECとなる対象は終了値126とする。sudo経路ではsudo実装がshell fallbackする場合があり、この経路差は許容する。スクリプトにはshebangを付けるか、明示的にインタープリタを指定する。
@@ -275,6 +277,7 @@ shebangなしスクリプトなど、directでENOEXECとなる対象は終了値
 | --- | --- |
 | sudoが見つからない | direct fallback |
 | sudoのPATH探索結果が禁止する相対パス | direct fallback。該当sudoを起動しない |
+| sudo探索の予期しないエラー（`ELOOP`など） | error。対象を起動せず、directへ進まない |
 | preflight用sudoが起動不能：不存在、権限不足、実行形式不正など | direct fallback |
 | preflightの通常非ゼロ終了 | direct fallback |
 | policy denyによる通常非ゼロ終了 | direct fallback |
@@ -317,22 +320,21 @@ errno等の扱いは次を基本とする。
 
 ## 12. Compatibility
 
-### 正式対応の方針
+### 検証済み
 
-- upstream sudo＋sudoers policyを対象とする。
-- 実際にCIまたは実機で検証したOS同梱版を正式対応として記載する。
-- 初期検証の中心はsudo 1.9系とする。
+upstream sudo＋sudoers policyを対象とする。Linux上のupstream sudo 1.9系を用いた実際の実行は検証済みである。これを未検証のOS・アーキテクチャ・バージョンへ一般化しない。
 
 ### Best effort
 
-- 未検証のupstream sudo。
-- sudo-rs。
+- macOS上のsudo。CIのテストスイート成功は、実sudoによる実行の互換性検証を意味しない。別途検証するまではbest effortとする。
+- sudo-rs。別途検証するまではbest effortとする。
+- その他の未検証のupstream sudo。
 - 古いsudo。
 - 独自policy plugin。
 
 バージョン文字列をruntimeで解析して拒否する機能は作らない。最低sudoバージョンを推測で設定しない。READMEまたは互換性一覧には、実際に検証したOS・アーキテクチャ・sudo実装・バージョンだけを検証済みとして記載する。
 
-本仕様書は実機検証完了を示すものではない。最低GoバージョンはGo 1.26とする。正式な対応OS・アーキテクチャは実装開始時に確定し、検証結果はリリース前に記録する。
+最低GoバージョンはGo 1.26とする。
 
 ## 13. Security / known limitations
 
