@@ -65,7 +65,7 @@ func main() {
   case "remove":if e:=os.Remove(os.Args[0]); e!=nil {panic(e)}
   case "signal":syscall.Kill(os.Getpid(),syscall.SIGKILL); select{}
   case "hold":
-   c:=make(chan os.Signal,1); signal.Notify(c,syscall.SIGINT,syscall.SIGTERM)
+   c:=make(chan os.Signal,4); signal.Notify(c,syscall.SIGINT,syscall.SIGTERM,syscall.SIGHUP,syscall.SIGQUIT)
    fmt.Fprintf(os.Stderr,"ready %d\n",os.Getpid()); <-c; os.Exit(0)
   }
   os.Exit(0)
@@ -249,7 +249,7 @@ func main() {
 		}
 	})
 
-	for _, sig := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM} {
+	for _, sig := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT} {
 		t.Run("parent interruption "+sig.String(), func(t *testing.T) {
 			work := t.TempDir()
 			record := filepath.Join(work, "events")

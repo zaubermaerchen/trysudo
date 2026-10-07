@@ -43,13 +43,15 @@ func resolveDirect(command string) (string, error) {
 	}
 	// LookPath skips unexecutable candidates and collapses their errors into
 	// ErrNotFound. Preserve its search order, then distinguish absent targets
-	// from found or inaccessible targets only after the search has failed.
+	// from found targets only after the search has failed.
 	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
 		_, statErr := os.Stat(filepath.Join(dir, command))
 		if statErr == nil {
 			return "", &exec.Error{Name: command, Err: syscall.EACCES}
 		}
-		if !errors.Is(statErr, syscall.ENOENT) && !errors.Is(statErr, syscall.ENOTDIR) {
+		// Search permission failure does not establish that this command
+		// exists; an unrelated inaccessible PATH entry must not decide 126.
+		if !errors.Is(statErr, syscall.ENOENT) && !errors.Is(statErr, syscall.ENOTDIR) && !errors.Is(statErr, syscall.EACCES) {
 			return "", &exec.Error{Name: command, Err: statErr}
 		}
 	}

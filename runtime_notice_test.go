@@ -134,12 +134,15 @@ func TestRuntimeDiagnosticWriteFailure(t *testing.T) {
 	}
 	for _, descriptor := range []string{"broken pipe", "closed", "open"} {
 		for _, fixture := range []struct {
-			name string
-			code int
+			name       string
+			code       int
+			diagnostic string
 		}{
-			{"credentials", 1}, {"discovery", 1}, {"preflight internal", 1},
-			{"unknown result", 1}, {"final sudo exec", 126},
-			{"direct missing", 127}, {"direct ENOEXEC", 126},
+			{name: "credentials", code: 1}, {name: "discovery", code: 1}, {name: "preflight internal", code: 1},
+			{name: "unknown result", code: 1}, {name: "final sudo exec", code: 126},
+			{name: "direct missing", code: 127}, {name: "direct ENOEXEC", code: 126},
+			{name: "usage no command", code: 2, diagnostic: "trysudo: command is required\n"},
+			{name: "usage invalid option", code: 2, diagnostic: "trysudo: unknown option: --invalid\n"},
 		} {
 			t.Run(descriptor+" "+fixture.name, func(t *testing.T) {
 				dir := t.TempDir()
@@ -190,8 +193,13 @@ func TestRuntimeDiagnosticWriteFailure(t *testing.T) {
 				if fixture.name != "direct missing" && fixture.name != "direct ENOEXEC" && bytes.Contains(stderr.Bytes(), []byte(fallbackNotice)) {
 					t.Errorf("unexpected fallback notice: %q", stderr.String())
 				}
-				if descriptor == "open" && stderr.Len() == 0 {
-					t.Error("runtime diagnostic missing")
+				if descriptor == "open" {
+					if stderr.Len() == 0 {
+						t.Error("runtime diagnostic missing")
+					}
+					if fixture.diagnostic != "" && stderr.String() != fixture.diagnostic {
+						t.Errorf("usage diagnostic %q, want %q", stderr.String(), fixture.diagnostic)
+					}
 				}
 			})
 		}
@@ -214,6 +222,10 @@ func TestRuntimeDiagnosticHarness(t *testing.T) {
 	options := cliOptions{command: []string{"/bin/sh", "-c", `printf executed > "$1"`, "sh", os.Getenv("TRYSUDO_DIAGNOSTIC_MARKER")}}
 	creds := credentials{uid: 1000, euid: 1000, gid: 1000, egid: 1000}
 	switch fixture {
+	case "usage no command":
+		os.Exit(runWithCredentials(nil, os.Stdout, os.Stderr, creds))
+	case "usage invalid option":
+		os.Exit(runWithCredentials(append([]string{"--invalid"}, options.command...), os.Stdout, os.Stderr, creds))
 	case "credentials":
 		creds.uid++
 		os.Exit(runCommand(options, creds, os.Stderr))
