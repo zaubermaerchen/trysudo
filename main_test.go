@@ -14,7 +14,7 @@ func TestRunHelp(t *testing.T) {
 		if got := run(args, &stdout, &stderr); got != 0 {
 			t.Fatalf("run(%q) = %d, want 0", args, got)
 		}
-		for _, text := range []string{"trysudo [-n|--non-interactive] [--] command [args...]", "-h", "--help", "--version", "--non-interactive", "sudo not implemented"} {
+		for _, text := range []string{"trysudo [-n|--non-interactive] [--] command [args...]", "-h", "--help", "--version", "--non-interactive", "sudo not yet connected"} {
 			if !strings.Contains(stdout.String(), text) {
 				t.Errorf("help output %q does not contain %q", stdout.String(), text)
 			}
