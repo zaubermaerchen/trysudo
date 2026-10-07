@@ -3,8 +3,9 @@
 Run a command with sudo when allowed, otherwise run it directly.
 
 Commands currently run directly with the current environment and credentials,
-replacing trysudo via Unix exec. sudo discovery and preflight are not yet
-implemented; `-n` and `--non-interactive` are accepted but have no runtime effect.
+replacing trysudo via Unix exec. sudo discovery and preflight are implemented
+but are not yet connected to the CLI; `-n` and `--non-interactive` are accepted
+but have no runtime effect.
 
 Go 1.26 or newer is required.
 

@@ -17,7 +17,7 @@ const helpText = `Usage:
   trysudo --version
 
 Options:
-  -n, --non-interactive  Accept non-interactive mode (sudo not implemented).
+  -n, --non-interactive  Accept non-interactive mode (sudo not yet connected).
   -h, --help             Show this help.
   --version              Show the version.
   --                     End trysudo option parsing.
