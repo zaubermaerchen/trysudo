@@ -17,7 +17,7 @@ const helpText = `Usage:
   trysudo --version
 
 Options:
-  -n, --non-interactive  Accept non-interactive mode (sudo not yet connected).
+  -n, --non-interactive  Disable interactive sudo authentication.
   -h, --help             Show this help.
   --version              Show the version.
   --                     End trysudo option parsing.
@@ -69,6 +69,10 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
+	return runWithCredentials(args, stdout, stderr, credentials{uid: os.Getuid(), euid: os.Geteuid(), gid: os.Getgid(), egid: os.Getegid()})
+}
+
+func runWithCredentials(args []string, stdout, stderr io.Writer, creds credentials) int {
 	options, err := parseCLI(args)
 	if err != nil {
 		fmt.Fprintf(stderr, "trysudo: %v\n", err)
@@ -82,5 +86,5 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "trysudo %s\n", version)
 		return 0
 	}
-	return runDirect(options.command, stderr)
+	return runCommand(options, creds, stderr)
 }

@@ -16,7 +16,7 @@ import (
 func runDirect(command []string, stderr io.Writer) int {
 	path, err := resolveDirect(command[0])
 	if err != nil {
-		fmt.Fprintf(stderr, "trysudo: %v\n", err)
+		writeDiagnostic(stderr, fmt.Sprintf("trysudo: %v\n", err))
 		if errors.Is(err, exec.ErrNotFound) || errors.Is(err, syscall.ENOENT) || errors.Is(err, syscall.ENOTDIR) {
 			return 127
 		}
@@ -25,7 +25,7 @@ func runDirect(command []string, stderr io.Writer) int {
 	// Once a target is selected, even ENOENT may mean a missing interpreter or
 	// loader. Do not probe again or retry through a shell or another path.
 	err = syscall.Exec(path, command, os.Environ())
-	fmt.Fprintf(stderr, "trysudo: %v\n", err)
+	writeDiagnostic(stderr, fmt.Sprintf("trysudo: %v\n", err))
 	return 126
 }
 
