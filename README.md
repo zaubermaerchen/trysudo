@@ -2,10 +2,16 @@
 
 Run a command with sudo when allowed, otherwise run it directly.
 
-Commands currently run directly with the current environment and credentials,
-replacing trysudo via Unix exec. sudo discovery and preflight are implemented
-but are not yet connected to the CLI; `-n` and `--non-interactive` are accepted
-but have no runtime effect.
+Non-root invocations inquire about the exact command with sudo, then replace
+trysudo with sudo on success or run directly after an ordinary preflight failure.
+`-n` and `--non-interactive` disable interactive sudo authentication in both
+steps. Effective root runs directly without preflight. Direct execution retains
+the current environment and credentials.
+
+Interruption, a signaled preflight child, and internal errors abort without
+running the target. Direct fallback emits a best-effort stderr notice. Once an
+execution path is committed, failures never retry through the other path.
+Real/effective UID or GID mismatches are rejected.
 
 Go 1.26 or newer is required.
 
@@ -24,4 +30,4 @@ CI checks Ubuntu and macOS with Go 1.26 and 1.27. The manually triggered
 and arm64 as workflow artifacts. Extract the included `trysudo.tar.gz` to
 preserve the binary's executable permissions. It does not publish GitHub Releases.
 
-See [the v0.1 specification](docs/SPEC.md) for the planned runtime behavior.
+See [the v0.1 specification](docs/SPEC.md) for the runtime contract and its limitations.

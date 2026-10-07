@@ -18,8 +18,10 @@ import (
 
 func TestDirectExecution(t *testing.T) {
 	dir := t.TempDir()
-	cli := filepath.Join(dir, "trysudo")
-	buildTestBinary(t, cli, ".")
+	cli, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
 	source := filepath.Join(dir, "command.go")
 	writeTestFile(t, source, []byte(`package main
 import ("encoding/json"; "fmt"; "io"; "os"; "strconv")
@@ -41,7 +43,7 @@ func main() {
 		args := []string{command, "", "a b", "日本語", "--help", "--version", "-n", "--", "$HOME", "a|b", "*.txt", "$(exit 9)", "; exit 9"}
 		for _, prefix := range [][]string{nil, {"-n"}, {"--non-interactive"}, {"-n", "--non-interactive", "--"}} {
 			env := testEnvironment(map[string]string{"TRYSUDO_TEST_VALUE": "inherited 日本語", "TRYSUDO_TEST_EXIT": "37"})
-			stdout, stderr, code, pid := runTestCLI(t, cli, dir, env, "stdin 日本語\n", append(append([]string{}, prefix...), args...)...)
+			stdout, stderr, code, pid := runRootDirectCLI(t, cli, dir, env, "stdin 日本語\n", append(append([]string{}, prefix...), args...)...)
 			if code != 37 {
 				t.Fatalf("exit = %d, want 37; stderr %q", code, stderr)
 			}
@@ -117,7 +119,7 @@ func main() {
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				stdout, stderr, code, _ := runTestCLI(t, cli, work, testEnvironment(map[string]string{"PATH": tt.path, "GODEBUG": tt.debug, "TRYSUDO_TEST_EXIT": "0"}), "", tt.args...)
+				stdout, stderr, code, _ := runRootDirectCLI(t, cli, work, testEnvironment(map[string]string{"PATH": tt.path, "GODEBUG": tt.debug, "TRYSUDO_TEST_EXIT": "0"}), "", tt.args...)
 				if code != tt.code {
 					t.Fatalf("exit = %d, want %d; stdout %q; stderr %q", code, tt.code, stdout, stderr)
 				}
@@ -141,6 +143,27 @@ func main() {
 			})
 		}
 	})
+}
+
+// The direct-path contract must not depend on the CI user's privileges or
+// installed sudo policy. The subprocess still replaces itself through exec.
+func runRootDirectCLI(t *testing.T, cli, dir string, env []string, input string, args ...string) (string, string, int, int) {
+	t.Helper()
+	filtered := make([]string, 0, len(env)+1)
+	for _, entry := range env {
+		if !strings.HasPrefix(entry, "TRYSUDO_DIRECT_HARNESS=") {
+			filtered = append(filtered, entry)
+		}
+	}
+	filtered = append(filtered, "TRYSUDO_DIRECT_HARNESS=1")
+	return runTestCLI(t, cli, dir, filtered, input, append([]string{"-test.run=^TestDirectHarness$", "--"}, args...)...)
+}
+
+func TestDirectHarness(t *testing.T) {
+	if os.Getenv("TRYSUDO_DIRECT_HARNESS") != "1" {
+		return
+	}
+	os.Exit(runWithCredentials(os.Args[3:], os.Stdout, os.Stderr, credentials{}))
 }
 
 func buildTestBinary(t *testing.T, output, source string) {
