@@ -1,6 +1,9 @@
 name: Build Unix binaries
 
 on:
+  push:
+    tags: ['v*']
+  pull_request:
   workflow_dispatch:
     inputs:
       version:
@@ -12,38 +15,157 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  build:
-    name: ${{ matrix.goos }}/${{ matrix.goarch }}
+  prepare:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        goos: [linux, darwin]
-        goarch: [amd64, arm64]
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version: '1.26.x'
-          cache: false
-      - name: Build
+      - name: Select and validate version
+        id: version
         env:
-          CGO_ENABLED: '0'
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          VERSION: ${{ inputs.version }}
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
+          if [ "$EVENT" = push ] && [ "$REF_TYPE" = tag ]; then
+            VERSION=$REF_NAME
+            if ! [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+              printf '%s\n' 'Release tags must use vMAJOR.MINOR.PATCH' >&2
+              exit 1
+            fi
+          elif [ "$EVENT" = workflow_dispatch ]; then
+            VERSION=$INPUT_VERSION
+          else
+            VERSION=devel
+          fi
           case "$VERSION" in
             ''|*[!A-Za-z0-9._+-]*)
               printf '%s\n' 'Invalid version label' >&2
               exit 1
               ;;
           esac
+          printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-latest
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-24.04-arm
+          - goos: darwin
+            goarch: amd64
+            runner: macos-15-intel
+          - goos: darwin
+            goarch: arm64
+            runner: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.x'
+          cache: false
+      - name: Check native platform and tests
+        env:
+          EXPECTED_GOOS: ${{ matrix.goos }}
+          EXPECTED_GOARCH: ${{ matrix.goarch }}
+        run: |
+          test "$(go env GOHOSTOS)" = "$EXPECTED_GOOS"
+          test "$(go env GOHOSTARCH)" = "$EXPECTED_GOARCH"
+          test -z "$(gofmt -l .)"
+          git diff --check "$(git hash-object -t tree /dev/null)" HEAD
+          go test ./...
+          go vet ./...
+      - name: Build, package, and smoke test
+        env:
+          CGO_ENABLED: '0'
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mkdir -p dist unpacked
           go build -trimpath -buildvcs=false -ldflags "-X main.version=$VERSION" -o dist/trysudo .
-          tar -czf dist/trysudo.tar.gz -C dist trysudo
+          chmod 755 dist/trysudo
+          ARCHIVE="trysudo-$VERSION-$GOOS-$GOARCH.tar.gz"
+          tar -czf "dist/$ARCHIVE" -C dist trysudo
+          test "$(tar -tzf "dist/$ARCHIVE")" = trysudo
+          tar -xzf "dist/$ARCHIVE" -C unpacked
+          test -x unpacked/trysudo
+          test "$(unpacked/trysudo --version)" = "trysudo $VERSION"
+          unpacked/trysudo --help > help.txt
+          grep -F 'Usage:' help.txt
       - uses: actions/upload-artifact@v7
         with:
           name: trysudo-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/trysudo.tar.gz
+          path: dist/*.tar.gz
           if-no-files-found: error
+
+  verify:
+    name: Verify complete release set
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.x'
+          cache: false
+      - name: Race test and verifier regressions
+        run: |
+          go test -race ./...
+          python3 -B -m unittest discover -s scripts -p 'test_*.py'
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: trysudo-*
+          merge-multiple: true
+          path: release
+      - name: Check archives and generate checksums
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          (cd release && sha256sum *.tar.gz > SHA256SUMS)
+          python3 scripts/verify_release.py "$VERSION" release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-assets
+          path: release/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish verified tagged release
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [prepare, verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-assets
+          path: release
+      - name: Create draft, verify uploaded files, then publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          python3 scripts/verify_release.py "$VERSION" release
+          test -s "docs/RELEASE-$VERSION.md"
+          gh release create "$VERSION" release/* --verify-tag --draft --title "trysudo $VERSION" --notes-file "docs/RELEASE-$VERSION.md"
+          gh release download "$VERSION" --dir uploaded
+          cmp release/SHA256SUMS uploaded/SHA256SUMS
+          python3 scripts/verify_release.py "$VERSION" uploaded
+          gh release edit "$VERSION" --draft=false
