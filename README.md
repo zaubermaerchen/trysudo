@@ -80,4 +80,10 @@ and `SHA256SUMS` to
 GitHub Releases only after those checks pass. Manual workflow runs build and
 verify artifacts without publishing a release.
 
+After a stable tagged release is published, the workflow validates its assets
+and opens a Formula update PR in `zaubermaerchen/homebrew-tap` using
+`HOMEBREW_TAP_APP_ID` (repository variable) and
+`HOMEBREW_TAP_APP_PRIVATE_KEY` (repository secret). A maintainer reviews and
+merges the PR after the tap's checks pass.
+
 See [the v0.1 specification](docs/SPEC.md) for the runtime contract and its limitations.

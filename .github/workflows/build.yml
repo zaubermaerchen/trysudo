@@ -169,3 +169,18 @@ jobs:
           cmp release/SHA256SUMS uploaded/SHA256SUMS
           python3 scripts/verify_release.py "$VERSION" uploaded
           gh release edit "$VERSION" --draft=false
+
+  update-homebrew:
+    name: Open Homebrew Formula update PR
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [prepare, publish]
+    permissions:
+      contents: read
+    uses: zaubermaerchen/homebrew-tap/.github/workflows/update-formula.yml@0ce7c073c9f0c974af16ee4deaf009fac552eb5b
+    with:
+      formula: trysudo
+      tag: ${{ needs.prepare.outputs.version }}
+      automation-ref: 0ce7c073c9f0c974af16ee4deaf009fac552eb5b
+      app-id: ${{ vars.HOMEBREW_TAP_APP_ID }}
+    secrets:
+      app-private-key: ${{ secrets.HOMEBREW_TAP_APP_PRIVATE_KEY }}
