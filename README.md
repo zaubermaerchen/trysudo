@@ -72,7 +72,7 @@ validate the project's official Go 1.26 build. macOS and sudo-rs are unverified
 and remain best effort.
 
 CI checks Ubuntu and macOS with Go 1.26 and 1.27, but passing its Go test suite
-does not establish real-sudo execution compatibility. The **Build Unix binaries**
+does not establish real-sudo execution compatibility. The **Release**
 workflow builds Linux and macOS archives for amd64 and arm64, checks their
 contents and checksums, and smoke-tests generated binaries on Linux and macOS.
 Pushing a stable `vMAJOR.MINOR.PATCH` tag publishes the complete artifact set

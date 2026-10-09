@@ -1,4 +1,4 @@
-name: Build Unix binaries
+name: Release
 
 on:
   push:
